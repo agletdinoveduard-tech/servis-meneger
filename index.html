@@ -118,6 +118,35 @@
             max-height: 90vh;
             overflow-y: auto;
             -webkit-overflow-scrolling: touch;
+            position: relative;
+        }
+        /* Крестик закрытия в правом верхнем углу */
+        .modal-close-x {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: #eef2f5;
+            border: none;
+            font-size: 20px;
+            font-weight: bold;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #4a627a;
+            transition: 0.2s;
+            z-index: 10;
+        }
+        .modal-close-x:active {
+            background: #dce5ec;
+            transform: scale(0.95);
+        }
+        .modal-card h3 {
+            padding-right: 40px;
+            margin-top: 0;
         }
         .form-group {
             margin-bottom: 16px;
@@ -135,6 +164,11 @@
             border: 1px solid #cbdde6;
             font-size: 1rem;
             background: white;
+        }
+        input.phone-input {
+            font-family: monospace;
+            font-size: 1rem;
+            letter-spacing: 0.5px;
         }
         .flex-btns {
             display: flex;
@@ -237,6 +271,18 @@
         .close-modal-btn:active {
             background: #dce5ec;
         }
+        .clickable-phone {
+            cursor: pointer;
+            text-decoration: none;
+            color: #2c7da0;
+            font-weight: 500;
+            transition: 0.2s;
+            display: inline-block;
+        }
+        .clickable-phone:active {
+            opacity: 0.7;
+            transform: scale(0.98);
+        }
         @media (max-width: 680px) {
             body { padding: 8px; }
             .main-dashboard { padding: 12px; }
@@ -244,6 +290,7 @@
             .btn { padding: 10px 14px; font-size: 0.85rem; min-height: 44px; }
             .btn-add-client { padding: 10px 12px; min-height: 44px; }
             .modal-card { padding: 16px; }
+            .modal-close-x { top: 8px; right: 8px; width: 32px; height: 32px; font-size: 18px; }
             .filter-row > div { flex: 1 1 100%; }
             th, td { padding: 8px 6px; font-size: 0.8rem; }
             .flex-form-wrap > div { flex: 1 1 100%; }
@@ -313,14 +360,141 @@
     </div>
 </div>
 
-<!-- Модальные окна -->
-<div id="workersModal" class="modal"><div class="modal-card"><div id="workersApp"></div><button class="close-modal-btn">❌ Закрыть</button></div></div>
-<div id="priceModal" class="modal"><div class="modal-card"><div id="priceApp"></div><button class="close-modal-btn">❌ Закрыть</button></div></div>
-<div id="clientsModal" class="modal"><div class="modal-card"><div id="clientsApp"></div><button class="close-modal-btn">❌ Закрыть</button></div></div>
-<div id="journalModal" class="modal"><div class="modal-card" style="max-width: 1200px;"><div id="journalApp"></div><button class="close-modal-btn">❌ Закрыть</button></div></div>
+<!-- Модальные окна (с крестиками в правом верхнем углу) -->
+<div id="workersModal" class="modal"><div class="modal-card"><button class="modal-close-x">✕</button><div id="workersApp"></div><button class="close-modal-btn">❌ Закрыть</button></div></div>
+<div id="priceModal" class="modal"><div class="modal-card"><button class="modal-close-x">✕</button><div id="priceApp"></div><button class="close-modal-btn">❌ Закрыть</button></div></div>
+<div id="clientsModal" class="modal"><div class="modal-card"><button class="modal-close-x">✕</button><div id="clientsApp"></div><button class="close-modal-btn">❌ Закрыть</button></div></div>
+<div id="journalModal" class="modal"><div class="modal-card" style="max-width: 1200px;"><button class="modal-close-x">✕</button><div id="journalApp"></div><button class="close-modal-btn">❌ Закрыть</button></div></div>
 
 <script>
-    // ---------- ДАННЫЕ ----------
+    // ========== ФУНКЦИИ ДЛЯ РАБОТЫ С ТЕЛЕФОНАМИ ==========
+    
+    // Очистка номера от всех нецифровых символов
+    function cleanPhoneNumber(raw) {
+        if (!raw) return '';
+        let cleaned = raw.replace(/\D/g, '');
+        // Если первая цифра 8, меняем на 7
+        if (cleaned.startsWith('8')) {
+            cleaned = '7' + cleaned.substring(1);
+        }
+        // Если начинается с 9 (без кода страны), добавляем +7
+        if (cleaned.length === 10 && cleaned.match(/^9\d{9}$/)) {
+            cleaned = '7' + cleaned;
+        }
+        return cleaned;
+    }
+    
+    // Форматирование номера в вид +7 (XXX) XX XX XXX
+    function formatPhoneNumber(raw) {
+        const cleaned = cleanPhoneNumber(raw);
+        if (!cleaned) return '';
+        
+        // Берем последние 11 цифр (максимум)
+        let digits = cleaned.replace(/\D/g, '').slice(-11);
+        if (digits.length === 10) digits = '7' + digits;
+        if (digits.length !== 11) return raw; // возвращаем как есть, если не хватает цифр
+        
+        // Формат: +7 (XXX) XX XX XXX
+        const country = digits[0];
+        const area = digits.substring(1, 4);
+        const first = digits.substring(4, 6);
+        const second = digits.substring(6, 8);
+        const third = digits.substring(8, 11);
+        
+        return `+${country} (${area}) ${first} ${second} ${third}`;
+    }
+    
+    // Получение "сырого" номера для звонка (только цифры, начинается с +)
+    function getRawPhoneForCall(phone) {
+        const cleaned = cleanPhoneNumber(phone);
+        if (!cleaned) return '';
+        if (cleaned.startsWith('7')) return '+' + cleaned;
+        if (cleaned.startsWith('8')) return '+7' + cleaned.substring(1);
+        if (cleaned.length === 10) return '+7' + cleaned;
+        return cleaned;
+    }
+    
+    // Создание HTML для кликабельного телефона
+    function makeClickablePhone(phone) {
+        if (!phone || phone === '—') return '—';
+        const rawForCall = getRawPhoneForCall(phone);
+        const displayPhone = formatPhoneNumber(phone) || phone;
+        if (rawForCall && rawForCall.length > 3) {
+            return `<a href="tel:${rawForCall}" class="clickable-phone" onclick="event.stopPropagation();">📞 ${displayPhone}</a>`;
+        }
+        return displayPhone;
+    }
+    
+    // Обработчик ввода телефона с автоформатированием
+    function setupPhoneInput(inputElement) {
+        if (!inputElement) return;
+        
+        const formatAndSet = () => {
+            const cursorPos = inputElement.selectionStart;
+            const rawValue = inputElement.value;
+            const formatted = formatPhoneNumber(rawValue);
+            if (formatted !== rawValue) {
+                inputElement.value = formatted;
+                // Восстанавливаем позицию курсора примерно
+                const newPos = Math.min(cursorPos, formatted.length);
+                inputElement.setSelectionRange(newPos, newPos);
+            }
+        };
+        
+        inputElement.addEventListener('input', formatAndSet);
+        inputElement.addEventListener('blur', formatAndSet);
+        
+        // Инициализация при загрузке
+        if (inputElement.value) {
+            setTimeout(formatAndSet, 0);
+        }
+    }
+    
+    // ========== УНИВЕРСАЛЬНАЯ ФУНКЦИЯ ЗАКРЫТИЯ МОДАЛЬНОГО ОКНА ==========
+    function closeModal(modalElement) {
+        if (modalElement) {
+            modalElement.style.display = 'none';
+        }
+    }
+    
+    function setupModalClosing(modalElement) {
+        if (!modalElement) return;
+        
+        // Находим крестик и кнопку "Закрыть" внутри модального окна
+        const closeX = modalElement.querySelector('.modal-close-x');
+        const closeBtn = modalElement.querySelector('.close-modal-btn');
+        
+        // Закрытие по крестику
+        if (closeX) {
+            closeX.onclick = (e) => {
+                e.stopPropagation();
+                closeModal(modalElement);
+            };
+        }
+        
+        // Закрытие по кнопке "Закрыть" внизу
+        if (closeBtn) {
+            closeBtn.onclick = (e) => {
+                e.stopPropagation();
+                closeModal(modalElement);
+            };
+        }
+        
+        // Закрытие по клику на фон (оверлей)
+        modalElement.onclick = (e) => {
+            if (e.target === modalElement) {
+                closeModal(modalElement);
+            }
+        };
+        
+        // Предотвращаем закрытие при клике на содержимое
+        const modalCard = modalElement.querySelector('.modal-card');
+        if (modalCard) {
+            modalCard.onclick = (e) => e.stopPropagation();
+        }
+    }
+    
+    // ========== ДАННЫЕ ==========
     let workers = [];      
     let services = [];     
     let clients = [];      
@@ -356,8 +530,8 @@
     function initDemoData() {
         if(workers.length) return;
         workers = [
-            { id: 1, lastName: 'Иванов', firstName: 'Петр', middleName: 'Сергеевич', specialty: 'Мастер по ремонту', phone: '+79991112233' },
-            { id: 2, lastName: 'Петрова', firstName: 'Анна', middleName: 'Викторовна', specialty: 'Косметолог', phone: '+79882223344' }
+            { id: 1, lastName: 'Иванов', firstName: 'Петр', middleName: 'Сергеевич', specialty: 'Мастер по ремонту', phone: '+7 (999) 111 22 33' },
+            { id: 2, lastName: 'Петрова', firstName: 'Анна', middleName: 'Викторовна', specialty: 'Косметолог', phone: '+7 (988) 222 33 44' }
         ];
         services = [
             { id: 1, name: 'Замена экрана', price: 3500 },
@@ -365,9 +539,9 @@
             { id: 3, name: 'Установка ПО', price: 800 }
         ];
         clients = [
-            { id: 1, lastName: 'Сидоров', firstName: 'Алексей', middleName: 'Дмитриевич', phone: '+79161112233', discountPercent: 10 },
-            { id: 2, lastName: 'Кузнецова', firstName: 'Елена', middleName: '', phone: '+79031234567', discountPercent: 0 },
-            { id: 3, lastName: 'Морозов', firstName: 'Дмитрий', middleName: 'Андреевич', phone: '+79261234567', discountPercent: 5 }
+            { id: 1, lastName: 'Сидоров', firstName: 'Алексей', middleName: 'Дмитриевич', phone: '+7 (916) 111 22 33', discountPercent: 10 },
+            { id: 2, lastName: 'Кузнецова', firstName: 'Елена', middleName: '', phone: '+7 (903) 123 45 67', discountPercent: 0 },
+            { id: 3, lastName: 'Морозов', firstName: 'Дмитрий', middleName: 'Андреевич', phone: '+7 (926) 123 45 67', discountPercent: 5 }
         ];
         journal = [
             { id: 100, date: new Date().toISOString().slice(0,10), clientId: 1, serviceId: 1, workerId: 1, finalPrice: 3150 },
@@ -379,12 +553,13 @@
     }
 
     function isWorkerDuplicate(lastName, firstName, middleName, phone, excludeId = null) {
+        const normalizedPhone = cleanPhoneNumber(phone);
         return workers.some(w => 
             w.id !== excludeId &&
             w.lastName.toLowerCase() === lastName.toLowerCase() &&
             w.firstName.toLowerCase() === firstName.toLowerCase() &&
             w.middleName.toLowerCase() === middleName.toLowerCase() &&
-            w.phone === phone
+            cleanPhoneNumber(w.phone) === normalizedPhone
         );
     }
 
@@ -396,12 +571,13 @@
     }
 
     function isClientDuplicate(lastName, firstName, middleName, phone, excludeId = null) {
+        const normalizedPhone = cleanPhoneNumber(phone);
         return clients.some(c => 
             c.id !== excludeId &&
             c.lastName.toLowerCase() === lastName.toLowerCase() &&
             c.firstName.toLowerCase() === firstName.toLowerCase() &&
             c.middleName.toLowerCase() === middleName.toLowerCase() &&
-            c.phone === phone
+            cleanPhoneNumber(c.phone) === normalizedPhone
         );
     }
 
@@ -438,8 +614,12 @@
         todayEntries.forEach(e => {
             const w = getWorkerById(e.workerId), s = getServiceById(e.serviceId), c = getClientById(e.clientId);
             html += `<tr>
-                        <td>${e.date}</td><td>${w ? getWorkerShort(w) : 'удалён'}</td><td>${s ? s.name : '-'}</td><td>${e.finalPrice} ₽</td><td>${c ? getClientShort(c) : '-'}</td>
-                     </tr>`;
+                        <td>${e.date}</td>
+                        <td>${w ? getWorkerShort(w) : 'удалён'}</td>
+                        <td>${s ? s.name : '-'}</td>
+                        <td>${e.finalPrice} ₽</td>
+                        <td>${c ? getClientShort(c) : '-'}</td>
+                      </tr>`;
         });
         html += '</tbody></table></div>';
         container.innerHTML = html;
@@ -465,34 +645,46 @@
 
     function refreshAll() { renderTodayJournal(); updateSelects(); saveAllToLocal(); }
 
-    // ----- БЫСТРОЕ СОЗДАНИЕ КЛИЕНТА -----
+    // ========== БЫСТРОЕ СОЗДАНИЕ КЛИЕНТА (с телефоном) ==========
     function showQuickClientForm(onSuccess) {
         const modalDiv = document.createElement('div');
         modalDiv.className = 'modal';
         modalDiv.style.display = 'flex';
-        modalDiv.innerHTML = `<div class="modal-card"><h3>➕ Быстрое создание клиента</h3>
+        modalDiv.innerHTML = `<div class="modal-card" style="position:relative;"><button class="modal-close-x" style="position:absolute; top:12px; right:12px;">✕</button><h3 style="padding-right:40px;">➕ Быстрое создание клиента</h3>
             <div class="form-group"><label>Фамилия</label><input id="qLastName" placeholder="Иванов"></div>
             <div class="form-group"><label>Имя</label><input id="qFirstName" placeholder="Петр"></div>
             <div class="form-group"><label>Отчество</label><input id="qMiddleName" placeholder="Сергеевич"></div>
-            <div class="form-group"><label>Телефон</label><input id="qPhone" placeholder="+7..."></div>
+            <div class="form-group"><label>Телефон</label><input id="qPhone" class="phone-input" placeholder="+7 (XXX) XX XX XXX" value="+7 "></div>
             <div class="form-group"><label>Скидка (%)</label><input id="qDiscount" type="number" value="0" step="1"></div>
-            <div class="flex-btns"><button id="quickSaveClientBtn" class="btn btn-primary">Сохранить</button><button id="quickCancelBtn" class="btn btn-outline">Отмена</button></div></div>`;
+            <div class="flex-btns"><button id="quickSaveClientBtn" class="btn btn-primary">Сохранить</button><button id="quickCancelBtn" class="btn btn-outline">Отмена</button></div>
+            <button class="close-modal-btn" style="margin-top:16px;">❌ Закрыть</button></div>`;
         document.body.appendChild(modalDiv);
+        
+        // Настройка закрытия
+        const closeX = modalDiv.querySelector('.modal-close-x');
+        const closeBtn = modalDiv.querySelector('.close-modal-btn');
+        if (closeX) closeX.onclick = () => modalDiv.remove();
+        if (closeBtn) closeBtn.onclick = () => modalDiv.remove();
+        modalDiv.onclick = (e) => { if (e.target === modalDiv) modalDiv.remove(); };
+        
+        const phoneInput = modalDiv.querySelector('#qPhone');
+        if (phoneInput) setupPhoneInput(phoneInput);
         
         const save = () => {
             const lastName = modalDiv.querySelector('#qLastName').value.trim();
             const firstName = modalDiv.querySelector('#qFirstName').value.trim();
             const middleName = modalDiv.querySelector('#qMiddleName').value.trim();
-            const phone = modalDiv.querySelector('#qPhone').value.trim();
+            const phoneRaw = modalDiv.querySelector('#qPhone').value.trim();
+            const phone = formatPhoneNumber(phoneRaw) || (phoneRaw || '—');
             let discount = parseInt(modalDiv.querySelector('#qDiscount').value);
             if(isNaN(discount)) discount = 0;
             
             if(!lastName && !firstName) { alert('Укажите хотя бы фамилию или имя'); return; }
             const ln = lastName || 'Новый', fn = firstName || 'Клиент', mn = middleName || '';
-            if(isClientDuplicate(ln, fn, mn, phone || '—')) { alert(`❌ Клиент уже существует!`); return; }
+            if(isClientDuplicate(ln, fn, mn, phone, null)) { alert(`❌ Клиент уже существует!`); return; }
             
             const newId = nextClientId++;
-            clients.push({ id: newId, lastName: ln, firstName: fn, middleName: mn, phone: phone || '—', discountPercent: discount });
+            clients.push({ id: newId, lastName: ln, firstName: fn, middleName: mn, phone: phone, discountPercent: discount });
             saveAllToLocal();
             modalDiv.remove();
             updateSelects();
@@ -507,17 +699,21 @@
         modalDiv.querySelector('#quickCancelBtn').onclick = () => modalDiv.remove();
     }
 
-    // ----- УПРОЩЁННЫЙ РЕНДЕР ДЛЯ МОБИЛЬНОЙ ВЕРСИИ -----
+    // ========== РЕНДЕР ИСПОЛНИТЕЛЕЙ ==========
     function renderWorkersModal(container) {
         let filterText = '';
         function renderList() {
             const filtered = workers.filter(w => `${w.lastName} ${w.firstName} ${w.middleName} ${w.specialty} ${w.phone}`.toLowerCase().includes(filterText.toLowerCase()));
-            let html = `<h3>👷 Исполнители</h3><div class="search-box"><input type="text" id="workerSearch" placeholder="🔍 Поиск..."><button id="clearWorkerSearch" class="btn btn-outline btn-sm">✖️</button></div>
+            let html = `<h3 style="padding-right:40px;">👷 Исполнители</h3><div class="search-box"><input type="text" id="workerSearch" placeholder="🔍 Поиск..."><button id="clearWorkerSearch" class="btn btn-outline btn-sm">✖️</button></div>
                         <button class="btn btn-primary" id="addWorkerBtn" style="margin-bottom:12px;">+ Добавить</button>
-                        <div class="overflow-auto"><table style="width:100%"><thead></td><th>Исполнитель</th><th>Специальность</th></tr></thead><tbody>`;
+                        <div class="overflow-auto"><table style="width:100%"><thead><tr><th>Исполнитель</th><th>Специальность</th><th>Телефон</th></tr></thead><tbody>`;
             filtered.forEach(w => {
                 const shortName = `${w.lastName} ${w.firstName.charAt(0)}.${w.middleName ? w.middleName.charAt(0)+'.' : ''}`;
-                html += `<tr class="worker-item" data-worker-id="${w.id}"><td><strong>${shortName}</strong></td><td>${w.specialty}</td></tr>`;
+                html += `<tr class="worker-item" data-worker-id="${w.id}">
+                            <td><strong>${shortName}</strong></td>
+                            <td>${w.specialty}</td>
+                            <td>${makeClickablePhone(w.phone)}</td>
+                          </tr>`;
             });
             html += `</tbody></table></div>`;
             container.innerHTML = html;
@@ -525,7 +721,8 @@
             document.getElementById('clearWorkerSearch')?.addEventListener('click', () => { filterText = ''; renderList(); });
             document.getElementById('addWorkerBtn')?.addEventListener('click', () => showWorkerFormModal(null, () => renderWorkersModal(container)));
             document.querySelectorAll('.worker-item').forEach(row => {
-                row.addEventListener('click', () => {
+                row.addEventListener('click', (e) => {
+                    if (e.target.closest('.clickable-phone')) return;
                     const id = parseInt(row.dataset.workerId);
                     const worker = workers.find(w => w.id === id);
                     if(worker) showWorkerDetailsModal(worker, () => renderWorkersModal(container));
@@ -539,14 +736,21 @@
         const modalDiv = document.createElement('div');
         modalDiv.className = 'modal';
         modalDiv.style.display = 'flex';
-        modalDiv.innerHTML = `<div class="modal-card"><h3>👤 Карточка исполнителя</h3>
+        modalDiv.innerHTML = `<div class="modal-card" style="position:relative;"><button class="modal-close-x" style="position:absolute; top:12px; right:12px;">✕</button><h3 style="padding-right:40px;">👤 Карточка исполнителя</h3>
             <div><strong>${worker.lastName} ${worker.firstName} ${worker.middleName}</strong></div>
-            <div>Специальность: ${worker.specialty}</div><div>📞 ${worker.phone}</div><hr>
+            <div>Специальность: ${worker.specialty}</div>
+            <div>📞 ${makeClickablePhone(worker.phone)}</div><hr>
             <div class="flex-btns"><button id="editWorkerBtn" class="btn btn-outline">✏️ Редактировать</button><button id="delWorkerBtn" class="btn danger-btn">🗑️ Удалить</button></div>
             <button id="closeModalBtn" class="close-modal-btn" style="margin-top:12px;">❌ Закрыть</button></div>`;
         document.body.appendChild(modalDiv);
+        
         const close = () => modalDiv.remove();
-        modalDiv.querySelector('#closeModalBtn').onclick = close;
+        const closeX = modalDiv.querySelector('.modal-close-x');
+        const closeBtn = modalDiv.querySelector('#closeModalBtn');
+        if (closeX) closeX.onclick = close;
+        if (closeBtn) closeBtn.onclick = close;
+        modalDiv.onclick = (e) => { if (e.target === modalDiv) close(); };
+        
         modalDiv.querySelector('#editWorkerBtn').onclick = () => { close(); showWorkerFormModal(worker, onRefresh); };
         modalDiv.querySelector('#delWorkerBtn').onclick = () => { if(confirm('Удалить?')) { workers = workers.filter(w=>w.id!==worker.id); saveAllToLocal(); close(); if(onRefresh) onRefresh(); refreshAll(); } };
     }
@@ -556,37 +760,50 @@
         const modalDiv = document.createElement('div');
         modalDiv.className = 'modal';
         modalDiv.style.display = 'flex';
-        modalDiv.innerHTML = `<div class="modal-card"><h3>${isEdit ? 'Редактировать' : 'Новый исполнитель'}</h3>
+        modalDiv.innerHTML = `<div class="modal-card" style="position:relative;"><button class="modal-close-x" style="position:absolute; top:12px; right:12px;">✕</button><h3 style="padding-right:40px;">${isEdit ? 'Редактировать' : 'Новый исполнитель'}</h3>
             <div class="form-group"><label>Фамилия *</label><input id="wLastName" value="${worker?worker.lastName:''}"></div>
             <div class="form-group"><label>Имя *</label><input id="wFirstName" value="${worker?worker.firstName:''}"></div>
             <div class="form-group"><label>Отчество *</label><input id="wMiddleName" value="${worker?worker.middleName:''}"></div>
             <div class="form-group"><label>Специальность *</label><input id="wSpecialty" value="${worker?worker.specialty:''}"></div>
-            <div class="form-group"><label>Телефон *</label><input id="wPhone" value="${worker?worker.phone:''}"></div>
-            <div class="flex-btns"><button id="saveBtn" class="btn btn-primary">Сохранить</button><button id="cancelBtn" class="btn btn-outline">Отмена</button></div></div>`;
+            <div class="form-group"><label>Телефон *</label><input id="wPhone" class="phone-input" value="${worker?worker.phone:''}" placeholder="+7 (XXX) XX XX XXX"></div>
+            <div class="flex-btns"><button id="saveBtn" class="btn btn-primary">Сохранить</button><button id="cancelBtn" class="btn btn-outline">Отмена</button></div>
+            <button class="close-modal-btn" style="margin-top:16px;">❌ Закрыть</button></div>`;
         document.body.appendChild(modalDiv);
+        
+        const close = () => modalDiv.remove();
+        const closeX = modalDiv.querySelector('.modal-close-x');
+        const closeBtn = modalDiv.querySelector('.close-modal-btn');
+        if (closeX) closeX.onclick = close;
+        if (closeBtn) closeBtn.onclick = close;
+        modalDiv.onclick = (e) => { if (e.target === modalDiv) close(); };
+        
+        const phoneInput = modalDiv.querySelector('#wPhone');
+        if (phoneInput) setupPhoneInput(phoneInput);
+        
         const save = () => {
             const ln = modalDiv.querySelector('#wLastName').value.trim();
             const fn = modalDiv.querySelector('#wFirstName').value.trim();
             const mn = modalDiv.querySelector('#wMiddleName').value.trim();
             const spec = modalDiv.querySelector('#wSpecialty').value.trim();
-            const ph = modalDiv.querySelector('#wPhone').value.trim();
+            let ph = modalDiv.querySelector('#wPhone').value.trim();
             if(!ln || !fn || !mn || !spec || !ph) { alert('Все поля обязательны'); return; }
+            ph = formatPhoneNumber(ph) || ph;
             if(isWorkerDuplicate(ln, fn, mn, ph, isEdit ? worker.id : null)) { alert(`❌ Дубликат!`); return; }
             if(isEdit) { worker.lastName=ln; worker.firstName=fn; worker.middleName=mn; worker.specialty=spec; worker.phone=ph; }
             else workers.push({ id: nextWorkerId++, lastName:ln, firstName:fn, middleName:mn, specialty:spec, phone:ph });
             saveAllToLocal();
-            modalDiv.remove(); if(callback) callback(); refreshAll();
+            close(); if(callback) callback(); refreshAll();
         };
         modalDiv.querySelector('#saveBtn').onclick = save;
-        modalDiv.querySelector('#cancelBtn').onclick = () => modalDiv.remove();
+        modalDiv.querySelector('#cancelBtn').onclick = close;
     }
 
-    // ----- ПРАЙС -----
+    // ========== ПРАЙС ==========
     function renderPriceModal(container) {
         let filter = '';
         function render() {
             const filtered = services.filter(s => s.name.toLowerCase().includes(filter.toLowerCase()) || s.price.toString().includes(filter));
-            let html = `<h3>💰 Прайс-лист</h3><div class="search-box"><input type="text" id="priceSearch" placeholder="🔍 Поиск..."><button id="clearPriceSearch" class="btn btn-outline btn-sm">✖️</button></div>
+            let html = `<h3 style="padding-right:40px;">💰 Прайс-лист</h3><div class="search-box"><input type="text" id="priceSearch" placeholder="🔍 Поиск..."><button id="clearPriceSearch" class="btn btn-outline btn-sm">✖️</button></div>
                         <button class="btn btn-primary" id="addPriceBtn">+ Добавить</button><div>`;
             filtered.forEach(s => { html += `<div class="card" style="display:flex; justify-content:space-between; align-items:center;"><span><strong>${s.name}</strong> — ${s.price} ₽</span><div><button class="btn btn-outline btn-sm edit-service" data-id="${s.id}">✏️</button><button class="btn danger-btn btn-sm delete-service" data-id="${s.id}">🗑️</button></div></div>`; });
             html += `</div>`; container.innerHTML = html;
@@ -598,37 +815,55 @@
         }
         function showServiceForm(service, cb) {
             const isEdit = !!service, modalDiv = document.createElement('div'); modalDiv.className='modal'; modalDiv.style.display='flex';
-            modalDiv.innerHTML = `<div class="modal-card"><h3>${isEdit?'Редактировать':'Новая услуга'}</h3><div class="form-group"><label>Название *</label><input id="sName" value="${service?service.name:''}"></div>
-            <div class="form-group"><label>Цена *</label><input id="sPrice" type="number" value="${service?service.price:''}"></div><div class="flex-btns"><button id="svBtn" class="btn btn-primary">Сохранить</button><button id="cnBtn" class="btn btn-outline">Отмена</button></div></div>`;
+            modalDiv.innerHTML = `<div class="modal-card" style="position:relative;"><button class="modal-close-x" style="position:absolute; top:12px; right:12px;">✕</button><h3 style="padding-right:40px;">${isEdit?'Редактировать':'Новая услуга'}</h3>
+            <div class="form-group"><label>Название *</label><input id="sName" value="${service?service.name:''}"></div>
+            <div class="form-group"><label>Цена *</label><input id="sPrice" type="number" value="${service?service.price:''}"></div>
+            <div class="flex-btns"><button id="svBtn" class="btn btn-primary">Сохранить</button><button id="cnBtn" class="btn btn-outline">Отмена</button></div>
+            <button class="close-modal-btn" style="margin-top:16px;">❌ Закрыть</button></div>`;
             document.body.appendChild(modalDiv);
+            
+            const close = () => modalDiv.remove();
+            const closeX = modalDiv.querySelector('.modal-close-x');
+            const closeBtn = modalDiv.querySelector('.close-modal-btn');
+            if (closeX) closeX.onclick = close;
+            if (closeBtn) closeBtn.onclick = close;
+            modalDiv.onclick = (e) => { if (e.target === modalDiv) close(); };
+            
             modalDiv.querySelector('#svBtn').onclick = () => {
                 const name = modalDiv.querySelector('#sName').value.trim(), price = parseFloat(modalDiv.querySelector('#sPrice').value);
                 if(!name || isNaN(price) || price<0) { alert('Ошибка'); return; }
                 if(isServiceDuplicate(name, isEdit ? service.id : null)) { alert(`❌ Услуга "${name}" уже есть!`); return; }
                 if(isEdit) { service.name=name; service.price=price; } else services.push({ id: nextServiceId++, name, price });
-                saveAllToLocal(); modalDiv.remove(); if(cb) cb(); refreshAll();
+                saveAllToLocal(); close(); if(cb) cb(); refreshAll();
             };
-            modalDiv.querySelector('#cnBtn').onclick = () => modalDiv.remove();
+            modalDiv.querySelector('#cnBtn').onclick = close;
         }
         render();
     }
 
-    // ----- КЛИЕНТЫ -----
+    // ========== КЛИЕНТЫ ==========
     function renderClientsModal(container) {
         let filter = '';
         function render() {
             const filtered = clients.filter(c => `${c.lastName} ${c.firstName} ${c.middleName} ${c.phone}`.toLowerCase().includes(filter.toLowerCase()));
-            let html = `<h3>🧑‍🤝‍🧑 Клиенты</h3><div class="search-box"><input type="text" id="clientSearch" placeholder="🔍 Поиск..."><button id="clearClientSearch" class="btn btn-outline btn-sm">✖️</button></div>
+            let html = `<h3 style="padding-right:40px;">🧑‍🤝‍🧑 Клиенты</h3><div class="search-box"><input type="text" id="clientSearch" placeholder="🔍 Поиск..."><button id="clearClientSearch" class="btn btn-outline btn-sm">✖️</button></div>
                         <button class="btn btn-primary" id="addClientBtn">+ Новый</button><div class="overflow-auto"><table style="width:100%"><thead><tr><th>Клиент</th><th>Телефон</th><th>Скидка</th></tr></thead><tbody>`;
             filtered.forEach(c => {
                 const short = `${c.lastName} ${c.firstName.charAt(0)}.${c.middleName?c.middleName.charAt(0)+'.':''}`;
-                html += `<tr class="client-item" data-id="${c.id}"><td><strong>${short}</strong></td><td>${c.phone}</td><td>${c.discountPercent>0?`<span class="discount-badge">-${c.discountPercent}%</span>`:'0%'}</td></tr>`;
+                html += `<tr class="client-item" data-id="${c.id}">
+                            <td><strong>${short}</strong></td>
+                            <td>${makeClickablePhone(c.phone)}</td>
+                            <td>${c.discountPercent>0?`<span class="discount-badge">-${c.discountPercent}%</span>`:'0%'}</td>
+                          </tr>`;
             });
-            html += `</tbody><table></div>`; container.innerHTML = html;
+            html += `</tbody></table></div>`; container.innerHTML = html;
             document.getElementById('clientSearch')?.addEventListener('input', e=>{ filter=e.target.value; render(); });
             document.getElementById('clearClientSearch')?.addEventListener('click', ()=>{ filter=''; render(); });
             document.getElementById('addClientBtn')?.addEventListener('click', ()=> showClientFormModal(null, ()=>renderClientsModal(container)));
-            document.querySelectorAll('.client-item').forEach(row=> row.addEventListener('click',()=> showClientDetailsModal(clients.find(c=>c.id==row.dataset.id), ()=>renderClientsModal(container))));
+            document.querySelectorAll('.client-item').forEach(row=> row.addEventListener('click', (e) => {
+                if (e.target.closest('.clickable-phone')) return;
+                showClientDetailsModal(clients.find(c=>c.id==row.dataset.id), ()=>renderClientsModal(container));
+            }));
         }
         render();
     }
@@ -638,15 +873,22 @@
         const lastEntries = [...journal].filter(e=>e.clientId===client.id).sort((a,b)=>b.id-a.id);
         const last = lastEntries[0];
         const lastInfo = last ? `${last.date} — ${getServiceNameById(last.serviceId)} (${last.finalPrice}₽)` : 'нет услуг';
-        modalDiv.innerHTML = `<div class="modal-card"><h3>📇 Карточка клиента</h3>
+        modalDiv.innerHTML = `<div class="modal-card" style="position:relative;"><button class="modal-close-x" style="position:absolute; top:12px; right:12px;">✕</button><h3 style="padding-right:40px;">📇 Карточка клиента</h3>
             <div><strong>${client.lastName} ${client.firstName} ${client.middleName||''}</strong></div>
-            <div>📞 ${client.phone}</div><div>💸 Скидка: ${client.discountPercent}%</div>
+            <div>📞 ${makeClickablePhone(client.phone)}</div>
+            <div>💸 Скидка: ${client.discountPercent}%</div>
             <div>🕒 Последняя услуга: ${lastInfo}</div><hr>
             <div class="flex-btns"><button id="editClientBtn" class="btn btn-outline">✏️ Редактировать</button><button id="delClientBtn" class="btn danger-btn">🗑️ Удалить</button></div>
             <button id="closeModalBtn" class="close-modal-btn" style="margin-top:12px;">❌ Закрыть</button></div>`;
         document.body.appendChild(modalDiv);
+        
         const close = () => modalDiv.remove();
-        modalDiv.querySelector('#closeModalBtn').onclick = close;
+        const closeX = modalDiv.querySelector('.modal-close-x');
+        const closeBtn = modalDiv.querySelector('#closeModalBtn');
+        if (closeX) closeX.onclick = close;
+        if (closeBtn) closeBtn.onclick = close;
+        modalDiv.onclick = (e) => { if (e.target === modalDiv) close(); };
+        
         modalDiv.querySelector('#editClientBtn').onclick = () => { close(); showClientFormModal(client, onRefresh); };
         modalDiv.querySelector('#delClientBtn').onclick = () => { if(confirm('Удалить клиента?')){ clients = clients.filter(c=>c.id!==client.id); saveAllToLocal(); close(); if(onRefresh) onRefresh(); refreshAll(); } };
     }
@@ -654,27 +896,41 @@
     function showClientFormModal(client, callback) {
         const isEdit = !!client;
         const modalDiv = document.createElement('div'); modalDiv.className='modal'; modalDiv.style.display='flex';
-        modalDiv.innerHTML = `<div class="modal-card"><h3>${isEdit?'Редактировать клиента':'Новый клиент'}</h3>
+        modalDiv.innerHTML = `<div class="modal-card" style="position:relative;"><button class="modal-close-x" style="position:absolute; top:12px; right:12px;">✕</button><h3 style="padding-right:40px;">${isEdit?'Редактировать клиента':'Новый клиент'}</h3>
             <div class="form-group"><label>Фамилия</label><input id="cLast" value="${client?client.lastName:''}"></div>
             <div class="form-group"><label>Имя</label><input id="cFirst" value="${client?client.firstName:''}"></div>
             <div class="form-group"><label>Отчество</label><input id="cMiddle" value="${client?client.middleName:''}"></div>
-            <div class="form-group"><label>Телефон</label><input id="cPhone" value="${client?client.phone:''}"></div>
+            <div class="form-group"><label>Телефон</label><input id="cPhone" class="phone-input" value="${client?client.phone:''}" placeholder="+7 (XXX) XX XX XXX"></div>
             <div class="form-group"><label>Скидка (%)</label><input id="cDiscount" type="number" value="${client?client.discountPercent:0}"></div>
-            <div class="flex-btns"><button id="saveClientBtn" class="btn btn-primary">Сохранить</button><button id="cancelClientBtn" class="btn btn-outline">Отмена</button></div></div>`;
+            <div class="flex-btns"><button id="saveClientBtn" class="btn btn-primary">Сохранить</button><button id="cancelClientBtn" class="btn btn-outline">Отмена</button></div>
+            <button class="close-modal-btn" style="margin-top:16px;">❌ Закрыть</button></div>`;
         document.body.appendChild(modalDiv);
+        
+        const close = () => modalDiv.remove();
+        const closeX = modalDiv.querySelector('.modal-close-x');
+        const closeBtn = modalDiv.querySelector('.close-modal-btn');
+        if (closeX) closeX.onclick = close;
+        if (closeBtn) closeBtn.onclick = close;
+        modalDiv.onclick = (e) => { if (e.target === modalDiv) close(); };
+        
+        const phoneInput = modalDiv.querySelector('#cPhone');
+        if (phoneInput) setupPhoneInput(phoneInput);
+        
         const save = () => {
             const ln = modalDiv.querySelector('#cLast').value.trim() || '—', fn = modalDiv.querySelector('#cFirst').value.trim() || '—', mn = modalDiv.querySelector('#cMiddle').value.trim();
-            const ph = modalDiv.querySelector('#cPhone').value.trim() || '—', disc = parseInt(modalDiv.querySelector('#cDiscount').value)||0;
+            let ph = modalDiv.querySelector('#cPhone').value.trim();
+            ph = formatPhoneNumber(ph) || (ph || '—');
+            const disc = parseInt(modalDiv.querySelector('#cDiscount').value)||0;
             if(isClientDuplicate(ln, fn, mn, ph, isEdit ? client.id : null)) { alert(`❌ Клиент уже существует!`); return; }
             if(isEdit) { client.lastName=ln; client.firstName=fn; client.middleName=mn; client.phone=ph; client.discountPercent=disc; }
             else clients.push({ id: nextClientId++, lastName:ln, firstName:fn, middleName:mn, phone:ph, discountPercent:disc });
-            saveAllToLocal(); modalDiv.remove(); if(callback) callback(); refreshAll();
+            saveAllToLocal(); close(); if(callback) callback(); refreshAll();
         };
         modalDiv.querySelector('#saveClientBtn').onclick = save;
-        modalDiv.querySelector('#cancelClientBtn').onclick = () => modalDiv.remove();
+        modalDiv.querySelector('#cancelClientBtn').onclick = close;
     }
 
-    // ----- ЖУРНАЛ (адаптивный) -----
+    // ========== ЖУРНАЛ ==========
     function renderJournalModal(container) {
         let filters = { from:'', to:'', service:'', worker:'', client:'', search:'' };
         function renderTable() {
@@ -696,7 +952,7 @@
                             <td>${w?getWorkerShort(w):'—'}</td>
                             <td>${s?s.name:'—'}</td>
                             <td>${e.finalPrice}₽</td>
-                            <td>${c?getClientShort(c):'—'}</td>
+                            <td>${c?`<span class="clickable-phone" style="cursor:default;">${getClientShort(c)}</span>`:'—'}</td>
                             <td class="action-buttons"><button class="btn btn-outline btn-sm edit-journal" data-id="${e.id}">✏️</button><button class="btn danger-btn btn-sm delete-journal" data-id="${e.id}">🗑️</button></td>
                           </tr>`;
             });
@@ -706,13 +962,22 @@
         }
         function editJournalEntry(entry, cb) {
             const modalDiv = document.createElement('div'); modalDiv.className='modal'; modalDiv.style.display='flex';
-            modalDiv.innerHTML = `<div class="modal-card"><h3>Редактировать запись</h3>
+            modalDiv.innerHTML = `<div class="modal-card" style="position:relative;"><button class="modal-close-x" style="position:absolute; top:12px; right:12px;">✕</button><h3 style="padding-right:40px;">Редактировать запись</h3>
             <div class="form-group"><label>Дата</label><input type="date" id="editDate" value="${entry.date}"></div>
             <div class="form-group"><label>Клиент</label><select id="editClient">${clients.map(c=>`<option value="${c.id}" ${c.id===entry.clientId?'selected':''}>${getClientShort(c)} (скидка ${c.discountPercent}%)</option>`).join('')}</select></div>
             <div class="form-group"><label>Услуга</label><select id="editService">${services.map(s=>`<option value="${s.id}" ${s.id===entry.serviceId?'selected':''}>${s.name} (${s.price}₽)</option>`).join('')}</select></div>
             <div class="form-group"><label>Исполнитель</label><select id="editWorker">${workers.map(w=>`<option value="${w.id}" ${w.id===entry.workerId?'selected':''}>${getWorkerShort(w)}</option>`).join('')}</select></div>
-            <div class="flex-btns"><button id="saveEdit" class="btn btn-primary">Сохранить</button><button id="cancelEdit" class="btn btn-outline">Отмена</button></div></div>`;
+            <div class="flex-btns"><button id="saveEdit" class="btn btn-primary">Сохранить</button><button id="cancelEdit" class="btn btn-outline">Отмена</button></div>
+            <button class="close-modal-btn" style="margin-top:16px;">❌ Закрыть</button></div>`;
             document.body.appendChild(modalDiv);
+            
+            const close = () => modalDiv.remove();
+            const closeX = modalDiv.querySelector('.modal-close-x');
+            const closeBtn = modalDiv.querySelector('.close-modal-btn');
+            if (closeX) closeX.onclick = close;
+            if (closeBtn) closeBtn.onclick = close;
+            modalDiv.onclick = (e) => { if (e.target === modalDiv) close(); };
+            
             modalDiv.querySelector('#saveEdit').onclick = () => {
                 const newDate = modalDiv.querySelector('#editDate').value, newClientId = parseInt(modalDiv.querySelector('#editClient').value);
                 const newServiceId = parseInt(modalDiv.querySelector('#editService').value), newWorkerId = parseInt(modalDiv.querySelector('#editWorker').value);
@@ -721,11 +986,11 @@
                 if(isJournalDuplicate(newDate, newClientId, newServiceId, newWorkerId, entry.id)) { alert(`❌ Такая запись уже есть!`); return; }
                 entry.date=newDate; entry.clientId=newClientId; entry.serviceId=newServiceId; entry.workerId=newWorkerId;
                 entry.finalPrice = calculateFinalPrice(service.price, client.discountPercent);
-                saveAllToLocal(); modalDiv.remove(); if(cb) cb(); refreshAll();
+                saveAllToLocal(); close(); if(cb) cb(); refreshAll();
             };
-            modalDiv.querySelector('#cancelEdit').onclick = () => modalDiv.remove();
+            modalDiv.querySelector('#cancelEdit').onclick = close;
         }
-        const html = `<h3>📋 Полный журнал</h3>
+        const html = `<h3 style="padding-right:40px;">📋 Полный журнал</h3>
             <div class="journal-filters">
                 <div class="filter-row">
                     <div><label>Дата от</label><input type="date" id="fromDate"></div>
@@ -750,21 +1015,28 @@
         renderTable();
     }
 
-    // ----- ОТКРЫТИЕ МОДАЛЬНЫХ ОКОН -----
+    // ========== ОТКРЫТИЕ МОДАЛЬНЫХ ОКОН ==========
     function openModal(modalId, renderFunc, containerId) {
-        const modal = document.getElementById(modalId), container = document.getElementById(containerId);
+        const modal = document.getElementById(modalId);
+        const container = document.getElementById(containerId);
+        
+        // Очищаем контейнер и рендерим содержимое
+        container.innerHTML = '';
         renderFunc(container);
+        
+        // Настраиваем закрытие для всех модальных окон
+        setupModalClosing(modal);
+        
+        // Показываем модальное окно
         modal.style.display = 'flex';
-        modal.querySelector('.modal-card')?.addEventListener('click', e => e.stopPropagation());
-        modal.querySelector('.close-modal-btn')?.addEventListener('click', () => modal.style.display = 'none');
-        modal.onclick = (e) => { if(e.target === modal) modal.style.display = 'none'; };
     }
+    
     document.getElementById('openWorkersBtn').onclick = () => openModal('workersModal', renderWorkersModal, 'workersApp');
     document.getElementById('openPriceBtn').onclick = () => openModal('priceModal', renderPriceModal, 'priceApp');
     document.getElementById('openClientsBtn').onclick = () => openModal('clientsModal', renderClientsModal, 'clientsApp');
     document.getElementById('openJournalBtn').onclick = () => openModal('journalModal', renderJournalModal, 'journalApp');
 
-    // ----- ДОБАВЛЕНИЕ ЗАПИСИ -----
+    // ========== ДОБАВЛЕНИЕ ЗАПИСИ ==========
     document.getElementById('addEntryBtn')?.addEventListener('click', () => {
         const date = document.getElementById('newEntryDate').value, clientId = parseInt(document.getElementById('newEntryClient').value);
         const serviceId = parseInt(document.getElementById('newEntryService').value), workerId = parseInt(document.getElementById('newEntryWorker').value);
@@ -779,7 +1051,7 @@
     });
     document.getElementById('quickAddClientBtn')?.addEventListener('click', () => showQuickClientForm());
 
-    // ----- БЭКАП -----
+    // ========== БЭКАП ==========
     document.getElementById('backupBtn')?.addEventListener('click', () => {
         const dataStr = JSON.stringify({ workers, services, clients, journal, nextWorkerId, nextServiceId, nextClientId, nextJournalId }, null, 2);
         const blob = new Blob([dataStr], {type: 'application/json'});
@@ -808,6 +1080,7 @@
         input.click();
     });
 
+    // ========== ИНИЦИАЛИЗАЦИЯ ==========
     loadFromLocal();
     initDemoData();
     updateSelects();
